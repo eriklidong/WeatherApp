@@ -3,7 +3,9 @@ const SEVERE_EVENTS = [
   'Severe Thunderstorm Warning',
   'Flash Flood Warning',
   'Extreme Wind Warning',
-  'Special Marine Warning'
+  'Special Marine Warning',
+  'Snow Squall Warning',
+  'Dust Storm Warning'
 ];
 
 const STORAGE_KEYS = {
@@ -110,8 +112,7 @@ async function connectSupabase() {
 }
 
 async function fetchSevereAlerts() {
-  const eventsQuery = SEVERE_EVENTS.map((evt) => `event=${encodeURIComponent(evt)}`).join('&');
-  const response = await fetch(`https://api.weather.gov/alerts/active?status=actual&message_type=alert&${eventsQuery}`, {
+  const response = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert', {
     headers: {
       Accept: 'application/geo+json'
     }
@@ -120,7 +121,11 @@ async function fetchSevereAlerts() {
   if (!response.ok) throw new Error(`NWS alerts request failed (${response.status})`);
 
   const data = await response.json();
-  return (data.features || []).filter((f) => f.geometry && f.properties?.severity !== 'Unknown');
+  return (data.features || []).filter((f) => {
+    const event = f.properties?.event || '';
+    const isConfiguredSevereWarning = SEVERE_EVENTS.some((name) => event.toLowerCase() === name.toLowerCase());
+    return isConfiguredSevereWarning && f.geometry;
+  });
 }
 
 async function fetchRadarFrames() {
@@ -210,11 +215,22 @@ function setRadarFrame(index) {
 function startRadarAnimation() {
   if (radarAnimationTimer) clearInterval(radarAnimationTimer);
 
+  if (radarFrames.length < 2) return;
+  const frameMillis = radarFrames
+    .slice(1)
+    .map((frame, idx) => (frame.time - radarFrames[idx].time) * 1000)
+    .filter((delta) => delta > 0);
+  const avgFrameDeltaMs = frameMillis.length
+    ? frameMillis.reduce((sum, value) => sum + value, 0) / frameMillis.length
+    : 10 * 60 * 1000;
+  const targetMsPerTick = 60 * 60 * 1000;
+  const framesPerTick = Math.max(1, Math.round(targetMsPerTick / avgFrameDeltaMs));
+
   radarAnimationTimer = setInterval(() => {
     if (!radarFrames.length) return;
-    const next = (currentFrameIndex + 1) % radarFrames.length;
+    const next = (currentFrameIndex + framesPerTick) % radarFrames.length;
     setRadarFrame(next);
-  }, 1200);
+  }, 1000);
 }
 
 async function upsertUserPreference() {
