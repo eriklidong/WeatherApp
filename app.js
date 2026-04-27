@@ -63,6 +63,7 @@ let radarFrames = [];
 let currentFrameIndex = 0;
 let radarAnimationTimer = null;
 let supabaseClient = null;
+let radarTileHost = 'https://tilecache.rainviewer.com';
 const browserId = getBrowserId();
 
 el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
@@ -112,8 +113,7 @@ async function fetchSevereAlerts() {
   const eventsQuery = SEVERE_EVENTS.map((evt) => `event=${encodeURIComponent(evt)}`).join('&');
   const response = await fetch(`https://api.weather.gov/alerts/active?status=actual&message_type=alert&${eventsQuery}`, {
     headers: {
-      Accept: 'application/geo+json',
-      'User-Agent': 'WeatherCenterDemo/1.0 (contact: weather-center@example.com)'
+      Accept: 'application/geo+json'
     }
   });
 
@@ -128,6 +128,7 @@ async function fetchRadarFrames() {
   if (!response.ok) throw new Error(`RainViewer request failed (${response.status})`);
 
   const data = await response.json();
+  radarTileHost = data.host || 'https://tilecache.rainviewer.com';
   const pastFrames = data.radar?.past || [];
   const nowcastFrames = data.radar?.nowcast || [];
   return [...pastFrames, ...nowcastFrames];
@@ -190,7 +191,7 @@ function setRadarFrame(index) {
   currentFrameIndex = index;
 
   const frame = radarFrames[index];
-  const url = `https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+  const url = `${radarTileHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
   if (overlays.radar) map.removeLayer(overlays.radar);
 
