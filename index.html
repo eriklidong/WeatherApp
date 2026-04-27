@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Center | NWS Severe Alerts + Live Radar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">U.S. Weather Operations Dashboard</p>
+      <h1>Weather Center</h1>
+      <p class="subtitle">Track active NWS severe weather alerts and real-time radar in one place.</p>
+    </div>
+    <div class="header-actions">
+      <button id="locateBtn" class="btn">Use My Location</button>
+      <button id="refreshBtn" class="btn btn-primary">Refresh Data</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card map-card">
+      <div class="card-header">
+        <h2>Live Radar + Alert Polygons</h2>
+        <p id="radarStatus">Loading radar frames…</p>
+      </div>
+      <div id="map"></div>
+      <div class="map-legend">
+        <span><i class="dot dot-red"></i>Tornado</span>
+        <span><i class="dot dot-orange"></i>Severe Thunderstorm</span>
+        <span><i class="dot dot-green"></i>Flash Flood</span>
+        <span><i class="dot dot-purple"></i>Other Severe</span>
+      </div>
+      <div class="timeline-wrap">
+        <label for="frameSlider">Radar timeline</label>
+        <input id="frameSlider" type="range" min="0" max="0" step="1" value="0" />
+      </div>
+    </section>
+
+    <section class="card alerts-card">
+      <div class="card-header">
+        <h2>Active Severe Alerts</h2>
+        <p id="alertMeta">Checking NWS feed…</p>
+      </div>
+      <div class="filters">
+        <label>
+          Search state/zone
+          <input id="filterInput" type="text" placeholder="Ex: TX, OK, KS..." />
+        </label>
+      </div>
+      <div id="alertsList" class="alerts-list"></div>
+    </section>
+
+    <section class="card data-card">
+      <div class="card-header">
+        <h2>Cloud Sync (Supabase)</h2>
+        <p id="supabaseStatus">Checking cloud connection…</p>
+      </div>
+      <div class="data-content">
+        <p class="data-note">This app stores your filter/map preferences and warning snapshots to Supabase when configured in Vercel.</p>
+        <div class="metric-grid">
+          <div class="metric">
+            <span>Saved snapshots</span>
+            <strong id="snapshotCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Last cloud sync</span>
+            <strong id="lastCloudSync">Never</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="alertTemplate">
+    <article class="alert-item">
+      <div class="alert-item-top">
+        <h3 class="alert-title"></h3>
+        <span class="badge"></span>
+      </div>
+      <p class="alert-area"></p>
+      <p class="alert-time"></p>
+      <p class="alert-headline"></p>
+      <button class="btn btn-small zoom-btn">Zoom To Warning</button>
+    </article>
+  </template>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js" type="module"></script>
+</body>
+</html>
