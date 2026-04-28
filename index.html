@@ -57,6 +57,10 @@
           Search state/zone
           <input id="filterInput" type="text" placeholder="Ex: TX, OK, KS..." />
         </label>
+        <label class="watch-toggle">
+          <input id="includeWatches" type="checkbox" />
+          Include severe watches
+        </label>
       </div>
       <div id="alertsList" class="alerts-list"></div>
     </section>
@@ -92,8 +96,22 @@
       <p class="alert-time"></p>
       <p class="alert-headline"></p>
       <button class="btn btn-small zoom-btn">Zoom To Warning</button>
+      <button class="btn btn-small details-btn">View Full NWS Details</button>
+      <button class="btn btn-small region-btn">Show All Region Alerts</button>
     </article>
   </template>
+
+  <dialog id="detailsModal" class="details-modal">
+    <article class="details-body">
+      <header>
+        <h3 id="detailsTitle"></h3>
+      </header>
+      <p id="detailsMeta"></p>
+      <pre id="detailsText"></pre>
+      <p><a id="detailsLink" href="#" target="_blank" rel="noopener noreferrer">View on weather.gov</a></p>
+      <button id="closeDetails" class="btn">Close</button>
+    </article>
+  </dialog>
 
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

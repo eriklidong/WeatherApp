@@ -10,7 +10,8 @@ const SEVERE_EVENTS = [
 
 const STORAGE_KEYS = {
   browserId: 'weather_center_browser_id',
-  filter: 'weather_center_filter'
+  filter: 'weather_center_filter',
+  includeWatches: 'weather_center_include_watches'
 };
 
 const map = L.map('map', {
@@ -51,10 +52,17 @@ const el = {
   radarStatus: document.getElementById('radarStatus'),
   alertsList: document.getElementById('alertsList'),
   filterInput: document.getElementById('filterInput'),
+  includeWatches: document.getElementById('includeWatches'),
   refreshBtn: document.getElementById('refreshBtn'),
   locateBtn: document.getElementById('locateBtn'),
   frameSlider: document.getElementById('frameSlider'),
   alertTemplate: document.getElementById('alertTemplate'),
+  detailsModal: document.getElementById('detailsModal'),
+  detailsTitle: document.getElementById('detailsTitle'),
+  detailsMeta: document.getElementById('detailsMeta'),
+  detailsText: document.getElementById('detailsText'),
+  detailsLink: document.getElementById('detailsLink'),
+  closeDetails: document.getElementById('closeDetails'),
   supabaseStatus: document.getElementById('supabaseStatus'),
   snapshotCount: document.getElementById('snapshotCount'),
   lastCloudSync: document.getElementById('lastCloudSync')
@@ -69,6 +77,7 @@ let radarTileHost = 'https://tilecache.rainviewer.com';
 const browserId = getBrowserId();
 
 el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
+el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
 
 function colorForEvent(eventName = '') {
   if (eventName.includes('Tornado')) return '#ef4444';
@@ -124,7 +133,9 @@ async function fetchSevereAlerts() {
   return (data.features || []).filter((f) => {
     const event = f.properties?.event || '';
     const isConfiguredSevereWarning = SEVERE_EVENTS.some((name) => event.toLowerCase() === name.toLowerCase());
-    return isConfiguredSevereWarning && f.geometry;
+    const isSevereWatch = /watch$/i.test(event) && /tornado|severe thunderstorm|flash flood/i.test(event);
+    const includeByType = isConfiguredSevereWarning || (el.includeWatches.checked && isSevereWatch);
+    return includeByType && f.geometry;
   });
 }
 
@@ -160,6 +171,8 @@ function renderAlerts() {
       const { properties } = feature;
       const frag = el.alertTemplate.content.cloneNode(true);
       const article = frag.querySelector('.alert-item');
+      const detailsBtn = frag.querySelector('.details-btn');
+      const regionBtn = frag.querySelector('.region-btn');
 
       frag.querySelector('.alert-title').textContent = properties.event;
       frag.querySelector('.badge').textContent = properties.severity || 'N/A';
@@ -181,9 +194,65 @@ function renderAlerts() {
           layer.openPopup?.();
         }
       });
+      detailsBtn.addEventListener('click', () => openAlertDetails(feature));
+
+      regionBtn.addEventListener('click', () => {
+        const related = findRelatedAlerts(feature);
+        openRegionDetails(feature, related);
+      });
 
       el.alertsList.appendChild(frag);
     });
+}
+
+function areaTokenSet(feature) {
+  const ugc = feature.properties?.geocode?.UGC || [];
+  if (ugc.length) return new Set(ugc);
+  return new Set([(feature.properties?.areaDesc || '').toUpperCase()]);
+}
+
+function findRelatedAlerts(targetFeature) {
+  const targetTokens = areaTokenSet(targetFeature);
+  return allAlerts.filter((candidate) => {
+    const candidateTokens = areaTokenSet(candidate);
+    return [...candidateTokens].some((token) => targetTokens.has(token));
+  });
+}
+
+function openAlertDetails(feature) {
+  const props = feature.properties || {};
+  const sent = props.sent ? new Date(props.sent).toLocaleString() : 'N/A';
+  const expires = props.expires ? new Date(props.expires).toLocaleString() : 'N/A';
+  const detailText = [
+    props.headline || '',
+    '',
+    props.description || 'No message body from NWS.',
+    '',
+    props.instruction ? `Instruction: ${props.instruction}` : ''
+  ].join('\n');
+
+  el.detailsTitle.textContent = props.event || 'NWS Alert';
+  el.detailsMeta.textContent = `Area: ${props.areaDesc || 'N/A'} • Issued: ${sent} • Expires: ${expires}`;
+  el.detailsText.textContent = detailText.trim();
+  el.detailsLink.href = props['@id'] || 'https://weather.gov';
+  el.detailsModal.showModal();
+}
+
+function openRegionDetails(targetFeature, relatedAlerts) {
+  const props = targetFeature.properties || {};
+  const summary = relatedAlerts
+    .map((item) => {
+      const p = item.properties || {};
+      const exp = p.expires ? new Date(p.expires).toLocaleString() : 'N/A';
+      return `• ${p.event} (${p.severity || 'N/A'}) — Expires: ${exp}`;
+    })
+    .join('\n');
+
+  el.detailsTitle.textContent = `Region alerts (${relatedAlerts.length})`;
+  el.detailsMeta.textContent = `Area group: ${props.areaDesc || 'N/A'}`;
+  el.detailsText.textContent = summary || 'No related alerts found.';
+  el.detailsLink.href = props['@id'] || 'https://weather.gov';
+  el.detailsModal.showModal();
 }
 
 function updateAlertOverlay() {
@@ -224,7 +293,7 @@ function startRadarAnimation() {
     ? frameMillis.reduce((sum, value) => sum + value, 0) / frameMillis.length
     : 10 * 60 * 1000;
   const targetMsPerTick = 60 * 60 * 1000;
-  const framesPerTick = Math.max(1, Math.round(targetMsPerTick / avgFrameDeltaMs));
+  const framesPerTick = Math.min(radarFrames.length - 1, Math.max(1, Math.round(targetMsPerTick / avgFrameDeltaMs)));
 
   radarAnimationTimer = setInterval(() => {
     if (!radarFrames.length) return;
@@ -327,7 +396,19 @@ el.filterInput.addEventListener('input', async () => {
   await upsertUserPreference();
 });
 
-el.frameSlider.addEventListener('input', () => setRadarFrame(Number(el.frameSlider.value)));
+el.includeWatches.addEventListener('change', () => {
+  localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked));
+  refreshAll();
+});
+
+el.frameSlider.addEventListener('input', () => {
+  if (radarAnimationTimer) clearInterval(radarAnimationTimer);
+  setRadarFrame(Number(el.frameSlider.value));
+});
+
+el.frameSlider.addEventListener('change', () => {
+  startRadarAnimation();
+});
 
 map.on('moveend', () => {
   upsertUserPreference();
@@ -346,6 +427,10 @@ el.locateBtn.addEventListener('click', () => {
     },
     { enableHighAccuracy: true, timeout: 8000 }
   );
+});
+
+el.closeDetails.addEventListener('click', () => {
+  el.detailsModal.close();
 });
 
 connectSupabase();

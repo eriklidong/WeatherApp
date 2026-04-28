@@ -139,6 +139,13 @@ h1,h2,h3,p { margin: 0; }
   gap: 0.45rem;
 }
 
+.watch-toggle {
+  margin-top: 0.7rem;
+  display: flex !important;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 input {
   background: #090f1f;
   color: var(--text);
@@ -188,6 +195,37 @@ input {
 .alert-headline {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.details-modal {
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: #0d1528;
+  color: var(--text);
+  width: min(760px, 92vw);
+}
+
+.details-modal::backdrop {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+.details-body {
+  display: grid;
+  gap: 0.8rem;
+}
+
+#detailsMeta {
+  color: var(--muted);
+}
+
+#detailsText {
+  white-space: pre-wrap;
+  max-height: 40vh;
+  overflow: auto;
+  background: #0a1122;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.8rem;
 }
 
 .data-content { padding: 1rem; display: grid; gap: 1rem; }
