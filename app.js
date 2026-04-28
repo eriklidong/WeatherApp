@@ -36,12 +36,27 @@ const overlays = {
       const props = feature.properties || {};
       const onset = props.onset ? new Date(props.onset).toLocaleString() : 'N/A';
       const expires = props.expires ? new Date(props.expires).toLocaleString() : 'N/A';
+      const featureId = props.id || feature.id || '';
       layer.bindPopup(`
         <strong>${props.event || 'Severe Alert'}</strong><br/>
         ${props.areaDesc || 'Unknown area'}<br/>
         Starts: ${onset}<br/>
-        Expires: ${expires}
+        Expires: ${expires}<br/>
+        <button class="btn btn-small popup-details-btn" data-alert-id="${featureId}">View Full NWS Details</button>
       `);
+      layer.on('popupopen', (event) => {
+        const popupEl = event.popup.getElement();
+        const button = popupEl?.querySelector('.popup-details-btn');
+        if (!button) return;
+        button.addEventListener('click', () => {
+          const alertId = button.getAttribute('data-alert-id') || '';
+          const selectedFeature = allAlerts.find((item) => {
+            const id = item.properties?.id || item.id || '';
+            return id === alertId;
+          });
+          if (selectedFeature) openAlertDetails(selectedFeature);
+        });
+      });
     }
   }).addTo(map),
   radar: null
@@ -147,7 +162,10 @@ async function fetchRadarFrames() {
   radarTileHost = data.host || 'https://tilecache.rainviewer.com';
   const pastFrames = data.radar?.past || [];
   const nowcastFrames = data.radar?.nowcast || [];
-  return [...pastFrames, ...nowcastFrames];
+  const sortedFrames = [...pastFrames, ...nowcastFrames]
+    .filter((frame) => typeof frame.time === 'number' && frame.path)
+    .sort((a, b) => a.time - b.time);
+  return sortedFrames.filter((frame, idx) => idx === 0 || frame.time !== sortedFrames[idx - 1].time);
 }
 
 function renderAlerts() {
@@ -285,19 +303,14 @@ function startRadarAnimation() {
   if (radarAnimationTimer) clearInterval(radarAnimationTimer);
 
   if (radarFrames.length < 2) return;
-  const frameMillis = radarFrames
-    .slice(1)
-    .map((frame, idx) => (frame.time - radarFrames[idx].time) * 1000)
-    .filter((delta) => delta > 0);
-  const avgFrameDeltaMs = frameMillis.length
-    ? frameMillis.reduce((sum, value) => sum + value, 0) / frameMillis.length
-    : 10 * 60 * 1000;
   const targetMsPerTick = 60 * 60 * 1000;
-  const framesPerTick = Math.min(radarFrames.length - 1, Math.max(1, Math.round(targetMsPerTick / avgFrameDeltaMs)));
 
   radarAnimationTimer = setInterval(() => {
     if (!radarFrames.length) return;
-    const next = (currentFrameIndex + framesPerTick) % radarFrames.length;
+    const currentTimeMs = radarFrames[currentFrameIndex].time * 1000;
+    const targetTimeMs = currentTimeMs + targetMsPerTick;
+    let next = radarFrames.findIndex((frame) => frame.time * 1000 >= targetTimeMs);
+    if (next === -1) next = 0;
     setRadarFrame(next);
   }, 1000);
 }
