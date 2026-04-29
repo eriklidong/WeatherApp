@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StormScope | Reports & Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-wrap"><div class="logo-mark">⛈</div><div><p class="eyebrow">PRO WEATHER INTELLIGENCE</p><h1>StormScope Reports</h1></div></div>
+    <nav class="top-nav">
+      <a href="./index.html">Live Ops</a>
+      <a href="./intel.html">Forecast Intel</a>
+      <a href="./reports.html" class="active">Reports</a>
+    </nav>
+  </header>
+
+  <main class="grid intel-grid">
+    <section class="card">
+      <div class="card-header"><h2>24h Alert Analytics</h2><p id="analyticsMeta">Loading…</p></div>
+      <div id="analyticsSummary" class="analytics-grid"></div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2>Top Affected Areas</h2><p>By active alert count</p></div>
+      <div id="topAreas" class="alerts-list"></div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2>Event Type Distribution</h2><p>Operational breakdown</p></div>
+      <div id="eventBreakdown" class="alerts-list"></div>
+    </section>
+  </main>
+  <script src="./reports.js" type="module"></script>
+</body>
+</html>

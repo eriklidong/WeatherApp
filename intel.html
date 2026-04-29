@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StormScope | Forecast Intel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-wrap"><div class="logo-mark">⛈</div><div><p class="eyebrow">PRO WEATHER INTELLIGENCE</p><h1>StormScope Forecast Intel</h1></div></div>
+    <nav class="top-nav">
+      <a href="./index.html">Live Ops</a>
+      <a href="./intel.html" class="active">Forecast Intel</a>
+      <a href="./reports.html">Reports</a>
+    </nav>
+  </header>
+
+  <main class="grid intel-grid">
+    <section class="card">
+      <div class="card-header"><h2>Location Forecast Lookup</h2><p id="lookupStatus">Idle</p></div>
+      <div class="filters">
+        <label>City or Location<input id="locationInput" type="text" placeholder="Dallas, TX" /></label>
+        <button id="lookupBtn" class="btn btn-primary">Get Forecast</button>
+      </div>
+      <div id="forecastCards" class="forecast-cards"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Hourly Conditions</h2><p>Next 12 Hours</p></div>
+      <div id="hourlyTable" class="hourly-table"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Hazard Headlines</h2><p id="hazardMeta">Loading…</p></div>
+      <div id="hazardsList" class="alerts-list"></div>
+    </section>
+  </main>
+  <script src="./intel.js" type="module"></script>
+</body>
+</html>
