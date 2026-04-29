@@ -9,7 +9,6 @@ const SEVERE_EVENTS = [
 ];
 
 const STORAGE_KEYS = {
-  browserId: 'weather_center_browser_id',
   filter: 'weather_center_filter',
   includeWatches: 'weather_center_include_watches'
 };
@@ -77,19 +76,14 @@ const el = {
   detailsMeta: document.getElementById('detailsMeta'),
   detailsText: document.getElementById('detailsText'),
   detailsLink: document.getElementById('detailsLink'),
-  closeDetails: document.getElementById('closeDetails'),
-  supabaseStatus: document.getElementById('supabaseStatus'),
-  snapshotCount: document.getElementById('snapshotCount'),
-  lastCloudSync: document.getElementById('lastCloudSync')
+  closeDetails: document.getElementById('closeDetails')
 };
 
 let allAlerts = [];
 let radarFrames = [];
 let currentFrameIndex = 0;
 let radarAnimationTimer = null;
-let supabaseClient = null;
 let radarTileHost = 'https://tilecache.rainviewer.com';
-const browserId = getBrowserId();
 
 el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
 el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
@@ -101,39 +95,6 @@ function colorForEvent(eventName = '') {
   return '#8b5cf6';
 }
 
-function getBrowserId() {
-  const existing = localStorage.getItem(STORAGE_KEYS.browserId);
-  if (existing) return existing;
-  const newId = crypto.randomUUID();
-  localStorage.setItem(STORAGE_KEYS.browserId, newId);
-  return newId;
-}
-
-async function loadRuntimeConfig() {
-  const response = await fetch('/api/config');
-  if (!response.ok) return null;
-  return response.json();
-}
-
-async function connectSupabase() {
-  try {
-    const runtime = await loadRuntimeConfig();
-    const url = runtime?.supabaseUrl;
-    const key = runtime?.supabaseAnonKey;
-    if (!url || !key || !window.supabase?.createClient) {
-      el.supabaseStatus.textContent = 'Not configured yet';
-      return;
-    }
-
-    supabaseClient = window.supabase.createClient(url, key);
-    el.supabaseStatus.textContent = 'Connected';
-
-    await upsertUserPreference();
-    await loadCloudMetrics();
-  } catch {
-    el.supabaseStatus.textContent = 'Configuration unavailable';
-  }
-}
 
 async function fetchSevereAlerts() {
   const response = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert', {
@@ -315,58 +276,6 @@ function startRadarAnimation() {
   }, 1000);
 }
 
-async function upsertUserPreference() {
-  if (!supabaseClient) return;
-
-  const center = map.getCenter();
-  const payload = {
-    browser_id: browserId,
-    filter_text: el.filterInput.value.trim(),
-    map_lat: center.lat,
-    map_lng: center.lng,
-    zoom_level: map.getZoom(),
-    updated_at: new Date().toISOString()
-  };
-
-  await supabaseClient.from('user_preferences').upsert(payload, { onConflict: 'browser_id' });
-}
-
-async function loadCloudMetrics() {
-  if (!supabaseClient) return;
-
-  const result = await supabaseClient
-    .from('alert_snapshots')
-    .select('*', { count: 'exact', head: true })
-    .eq('browser_id', browserId);
-
-  if (!result.error) {
-    el.snapshotCount.textContent = String(result.count || 0);
-  }
-}
-
-async function saveAlertSnapshot() {
-  if (!supabaseClient || !allAlerts.length) return;
-
-  const severeCountByType = allAlerts.reduce((acc, item) => {
-    const key = item.properties?.event || 'Other';
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-
-  const payload = {
-    browser_id: browserId,
-    captured_at: new Date().toISOString(),
-    total_alerts: allAlerts.length,
-    severe_count_by_type: severeCountByType
-  };
-
-  const { error } = await supabaseClient.from('alert_snapshots').insert(payload);
-  if (!error) {
-    el.lastCloudSync.textContent = new Date(payload.captured_at).toLocaleString();
-    const current = Number(el.snapshotCount.textContent || '0');
-    el.snapshotCount.textContent = String(current + 1);
-  }
-}
 
 async function refreshAll() {
   el.refreshBtn.disabled = true;
@@ -390,8 +299,6 @@ async function refreshAll() {
       el.radarStatus.textContent = 'Radar frames unavailable right now.';
     }
 
-    await upsertUserPreference();
-    await saveAlertSnapshot();
   } catch (error) {
     console.error(error);
     el.alertMeta.textContent = 'Could not load NWS alerts. Try refreshing in a moment.';
@@ -406,7 +313,6 @@ el.refreshBtn.addEventListener('click', refreshAll);
 el.filterInput.addEventListener('input', async () => {
   localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value);
   renderAlerts();
-  await upsertUserPreference();
 });
 
 el.includeWatches.addEventListener('change', () => {
@@ -421,10 +327,6 @@ el.frameSlider.addEventListener('input', () => {
 
 el.frameSlider.addEventListener('change', () => {
   startRadarAnimation();
-});
-
-map.on('moveend', () => {
-  upsertUserPreference();
 });
 
 el.locateBtn.addEventListener('click', () => {
@@ -446,6 +348,5 @@ el.closeDetails.addEventListener('click', () => {
   el.detailsModal.close();
 });
 
-connectSupabase();
 refreshAll();
 setInterval(refreshAll, 5 * 60 * 1000);
