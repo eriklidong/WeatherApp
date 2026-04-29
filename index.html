@@ -3,24 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Weather Center | NWS Severe Alerts + Live Radar</title>
+  <title>StormScope | Pro Weather Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="app-header">
-    <div>
-      <p class="eyebrow">U.S. Weather Operations Dashboard</p>
-      <h1>Weather Center</h1>
-      <p class="subtitle">Track active NWS severe weather alerts and real-time radar in one place.</p>
+    <div class="brand-wrap">
+      <div class="logo-mark" aria-hidden="true">⛈</div>
+      <div>
+        <p class="eyebrow">PRO WEATHER INTELLIGENCE</p>
+        <h1>StormScope</h1>
+      </div>
     </div>
     <div class="header-actions">
       <button id="locateBtn" class="btn">Use My Location</button>
@@ -28,12 +25,38 @@
     </div>
   </header>
 
+  <section class="status-strip">
+    <div class="status-pill"><span id="activeCount">0</span> Active Severe Alerts</div>
+    <div class="status-pill">Radar Frame: <span id="radarFrameMeta">--</span></div>
+    <div class="status-pill">Updated: <span id="updatedAt">--</span></div>
+  </section>
+
   <main class="grid">
     <section class="card map-card">
       <div class="card-header">
         <h2>Live Radar + Alert Polygons</h2>
         <p id="radarStatus">Loading radar frames…</p>
       </div>
+
+      <div class="map-controls">
+        <label>
+          Radar opacity
+          <input id="opacitySlider" type="range" min="0.2" max="1" step="0.1" value="0.6" />
+        </label>
+        <label>
+          Timeline speed
+          <select id="speedSelect">
+            <option value="30">30 min / sec</option>
+            <option value="60" selected>60 min / sec</option>
+            <option value="120">120 min / sec</option>
+          </select>
+        </label>
+        <label class="toggle-inline">
+          <input id="loopLatest" type="checkbox" checked />
+          Snap to latest on refresh
+        </label>
+      </div>
+
       <div id="map"></div>
       <div class="map-legend">
         <span><i class="dot dot-red"></i>Tornado</span>
@@ -49,22 +72,37 @@
 
     <section class="card alerts-card">
       <div class="card-header">
-        <h2>Active Severe Alerts</h2>
+        <h2>Alerts Command Center</h2>
         <p id="alertMeta">Checking NWS feed…</p>
       </div>
       <div class="filters">
         <label>
-          Search state/zone
-          <input id="filterInput" type="text" placeholder="Ex: TX, OK, KS..." />
+          Search state/zone/county
+          <input id="filterInput" type="text" placeholder="Ex: TX, OK, Dallas..." />
         </label>
         <label class="watch-toggle">
           <input id="includeWatches" type="checkbox" />
           Include severe watches
         </label>
+        <label class="watch-toggle">
+          <input id="criticalOnly" type="checkbox" />
+          Critical only (Extreme/Severe)
+        </label>
       </div>
       <div id="alertsList" class="alerts-list"></div>
     </section>
 
+    <section class="card favorites-card">
+      <div class="card-header">
+        <h2>Favorites</h2>
+        <p>Quick focus regions</p>
+      </div>
+      <div class="favorites-controls">
+        <input id="favName" type="text" placeholder="Label (e.g., North Texas)" />
+        <button id="saveFavBtn" class="btn btn-small">Save Current View</button>
+      </div>
+      <div id="favoritesList" class="favorites-list"></div>
+    </section>
   </main>
 
   <template id="alertTemplate">
@@ -76,17 +114,17 @@
       <p class="alert-area"></p>
       <p class="alert-time"></p>
       <p class="alert-headline"></p>
-      <button class="btn btn-small zoom-btn">Zoom To Warning</button>
-      <button class="btn btn-small details-btn">View Full NWS Details</button>
-      <button class="btn btn-small region-btn">Show All Region Alerts</button>
+      <div class="alert-actions">
+        <button class="btn btn-small zoom-btn">Zoom To Alert</button>
+        <button class="btn btn-small details-btn">Full NWS Details</button>
+        <button class="btn btn-small region-btn">Related Region Alerts</button>
+      </div>
     </article>
   </template>
 
   <dialog id="detailsModal" class="details-modal">
     <article class="details-body">
-      <header>
-        <h3 id="detailsTitle"></h3>
-      </header>
+      <header><h3 id="detailsTitle"></h3></header>
       <p id="detailsMeta"></p>
       <pre id="detailsText"></pre>
       <p><a id="detailsLink" href="#" target="_blank" rel="noopener noreferrer">View on weather.gov</a></p>
@@ -94,11 +132,7 @@
     </article>
   </dialog>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./app.js" type="module"></script>
 </body>
 </html>
