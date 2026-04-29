@@ -53,6 +53,7 @@ const el = {
   favName: document.getElementById('favName'),
   saveFavBtn: document.getElementById('saveFavBtn'),
   favoritesList: document.getElementById('favoritesList')
+  ,missionFeed: document.getElementById('missionFeed')
 };
 
 const overlays = {
@@ -149,6 +150,18 @@ function renderAlerts() {
   });
 }
 
+function renderMissionFeed() {
+  const latest = [...allAlerts]
+    .sort((a, b) => new Date(b.properties?.sent || 0) - new Date(a.properties?.sent || 0))
+    .slice(0, 18);
+  el.missionFeed.innerHTML = latest.length
+    ? latest.map((item) => {
+      const p = item.properties || {};
+      return `<article class="alert-item"><h3>${p.event || 'Alert'}</h3><p class="alert-area">${p.areaDesc || 'Unknown area'}</p><p class="alert-time">Sent: ${p.sent ? new Date(p.sent).toLocaleString() : 'N/A'}</p><p class="alert-headline">${p.headline || ''}</p></article>`;
+    }).join('')
+    : '<p class="empty">No active warning feed right now.</p>';
+}
+
 function areaTokenSet(feature) {
   const ugc = feature.properties?.geocode?.UGC || [];
   if (ugc.length) return new Set(ugc);
@@ -241,6 +254,7 @@ async function refreshAll() {
     el.frameSlider.max = String(Math.max(0, radarFrames.length - 1));
     updateAlertOverlay();
     renderAlerts();
+    renderMissionFeed();
     if (radarFrames.length) {
       const targetIndex = snapToLatest ? radarFrames.length - 1 : Math.min(currentFrameIndex, radarFrames.length - 1);
       setRadarFrame(targetIndex);

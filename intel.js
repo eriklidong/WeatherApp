@@ -9,6 +9,16 @@ const el = {
 };
 
 async function geocodeLocation(query) {
+  const openMeteo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
+  if (openMeteo.ok) {
+    const data = await openMeteo.json();
+    const first = data.results?.[0];
+    if (first) {
+      const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
+      return { lat: Number(first.latitude), lon: Number(first.longitude), name: label };
+    }
+  }
+
   const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
   if (!r.ok) throw new Error('Could not geocode location');
   const rows = await r.json();
@@ -62,6 +72,10 @@ el.lookupBtn.addEventListener('click', async () => {
   } catch (e) {
     el.lookupStatus.textContent = e.message;
   }
+});
+
+el.locationInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') el.lookupBtn.click();
 });
 
 loadHazards();
