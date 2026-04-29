@@ -69,6 +69,14 @@ h1,h2,h3,p { margin: 0; }
 #frameSlider{width:100%}
 .filters { padding:.85rem 1rem; border-bottom:1px solid var(--border); }
 .watch-toggle { display:flex !important; align-items:center; gap:.55rem; margin-top:.4rem; }
+.alert-toolbar {
+  display: flex;
+  gap: .55rem;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-top: .55rem;
+}
+.alert-toolbar label { min-width: 140px; }
 input,select { background:#041a1f; color:var(--text); border:1px solid var(--border); border-radius:.55rem; padding:.62rem; }
 .alerts-list { max-height:43vh; overflow:auto; display:grid; gap:.7rem; padding:.75rem; }
 .alert-item { border:1px solid var(--border); border-left:4px solid #8b5cf6; border-radius:.75rem; padding:.75rem; background:linear-gradient(180deg,#0d2f38,#0a242b); display:grid; gap:.4rem; }

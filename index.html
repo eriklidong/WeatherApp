@@ -60,6 +60,14 @@
           <input id="loopLatest" type="checkbox" checked />
           Snap to latest on refresh
         </label>
+        <label>
+          Base map
+          <select id="basemapSelect">
+            <option value="osm" selected>Street</option>
+            <option value="cartoDark">Dark</option>
+            <option value="cartoLight">Light</option>
+          </select>
+        </label>
       </div>
 
       <div id="map"></div>
@@ -93,6 +101,18 @@
           <input id="criticalOnly" type="checkbox" />
           Critical only (Extreme/Severe)
         </label>
+        <div class="alert-toolbar">
+          <label>
+            Auto refresh
+            <select id="refreshIntervalSelect">
+              <option value="60">1 min</option>
+              <option value="300" selected>5 min</option>
+              <option value="600">10 min</option>
+            </select>
+          </label>
+          <button id="exportAlertsBtn" class="btn btn-small">Export CSV</button>
+          <button id="shortcutsBtn" class="btn btn-small">Keyboard Shortcuts</button>
+        </div>
       </div>
       <div id="alertsList" class="alerts-list"></div>
     </section>
@@ -142,6 +162,18 @@
       <pre id="detailsText"></pre>
       <p><a id="detailsLink" href="#" target="_blank" rel="noopener noreferrer">View on weather.gov</a></p>
       <button id="closeDetails" class="btn">Close</button>
+    </article>
+  </dialog>
+
+  <dialog id="shortcutsModal" class="details-modal">
+    <article class="details-body">
+      <header><h3>Keyboard Shortcuts</h3></header>
+      <pre id="shortcutText">R → Refresh data
+L → Use my location
+F → Focus search input
+Space → Pause/Resume radar animation
+1/2/3 → Radar speed presets (30/60/120 min per second)</pre>
+      <button id="closeShortcuts" class="btn">Close</button>
     </article>
   </dialog>
 

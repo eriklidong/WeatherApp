@@ -12,11 +12,18 @@ const STORAGE_KEYS = {
   filter: 'weather_center_filter',
   includeWatches: 'weather_center_include_watches',
   criticalOnly: 'weather_center_critical_only',
-  favorites: 'weather_center_favorites'
+  favorites: 'weather_center_favorites',
+  refreshInterval: 'weather_center_refresh_interval'
 };
 
 const map = L.map('map', { center: [39.5, -98.35], zoom: 5, zoomControl: true });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+const baseLayers = {
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
+  cartoDark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; CARTO' }),
+  cartoLight: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; CARTO' })
+};
+let activeBaseLayer = baseLayers.osm;
+activeBaseLayer.addTo(map);
 
 let allAlerts = [];
 let radarFrames = [];
@@ -26,6 +33,7 @@ let radarTileHost = 'https://tilecache.rainviewer.com';
 let radarOpacity = 0.6;
 let minutesPerSecond = 60;
 let snapToLatest = true;
+let refreshTimer = null;
 
 const el = {
   alertMeta: document.getElementById('alertMeta'),
@@ -40,6 +48,12 @@ const el = {
   opacitySlider: document.getElementById('opacitySlider'),
   speedSelect: document.getElementById('speedSelect'),
   loopLatest: document.getElementById('loopLatest'),
+  basemapSelect: document.getElementById('basemapSelect'),
+  refreshIntervalSelect: document.getElementById('refreshIntervalSelect'),
+  exportAlertsBtn: document.getElementById('exportAlertsBtn'),
+  shortcutsBtn: document.getElementById('shortcutsBtn'),
+  shortcutsModal: document.getElementById('shortcutsModal'),
+  closeShortcuts: document.getElementById('closeShortcuts'),
   alertTemplate: document.getElementById('alertTemplate'),
   detailsModal: document.getElementById('detailsModal'),
   detailsTitle: document.getElementById('detailsTitle'),
@@ -82,6 +96,7 @@ const overlays = {
 el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
 el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
 el.criticalOnly.checked = localStorage.getItem(STORAGE_KEYS.criticalOnly) === 'true';
+el.refreshIntervalSelect.value = localStorage.getItem(STORAGE_KEYS.refreshInterval) || '300';
 
 function colorForEvent(eventName = '') {
   if (eventName.includes('Tornado')) return '#ef4444';
@@ -198,6 +213,13 @@ function updateAlertOverlay() {
   overlays.alerts.addData({ type: 'FeatureCollection', features: allAlerts });
 }
 
+function setBaseMap(layerKey) {
+  if (!baseLayers[layerKey]) return;
+  if (activeBaseLayer) map.removeLayer(activeBaseLayer);
+  activeBaseLayer = baseLayers[layerKey];
+  activeBaseLayer.addTo(map);
+}
+
 function setRadarFrame(index) {
   if (!radarFrames.length) return;
   currentFrameIndex = index;
@@ -226,6 +248,28 @@ function startRadarAnimation() {
 
 function getFavorites() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.favorites) || '[]'); } catch { return []; }
+}
+
+function exportAlertsCsv() {
+  if (!allAlerts.length) return;
+  const headers = ['event', 'severity', 'area', 'sent', 'expires', 'headline'];
+  const rows = allAlerts.map((item) => {
+    const p = item.properties || {};
+    return [p.event, p.severity, p.areaDesc, p.sent, p.expires, (p.headline || '').replaceAll('\"', '\"\"')];
+  });
+  const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `\"${String(v || '')}\"`).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `stormscope-alerts-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function scheduleRefreshTimer() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(refreshAll, Number(el.refreshIntervalSelect.value) * 1000);
 }
 function saveFavorites(favs) { localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favs)); }
 function renderFavorites() {
@@ -282,6 +326,14 @@ el.frameSlider.addEventListener('change', startRadarAnimation);
 el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
 el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
 el.loopLatest.addEventListener('change', () => { snapToLatest = el.loopLatest.checked; });
+el.basemapSelect.addEventListener('change', () => setBaseMap(el.basemapSelect.value));
+el.refreshIntervalSelect.addEventListener('change', () => {
+  localStorage.setItem(STORAGE_KEYS.refreshInterval, el.refreshIntervalSelect.value);
+  scheduleRefreshTimer();
+});
+el.exportAlertsBtn.addEventListener('click', exportAlertsCsv);
+el.shortcutsBtn.addEventListener('click', () => el.shortcutsModal.showModal());
+el.closeShortcuts.addEventListener('click', () => el.shortcutsModal.close());
 el.locateBtn.addEventListener('click', () => {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(({ coords }) => map.setView([coords.latitude, coords.longitude], 8));
@@ -299,4 +351,24 @@ el.saveFavBtn.addEventListener('click', () => {
 
 renderFavorites();
 refreshAll();
-setInterval(refreshAll, 5 * 60 * 1000);
+scheduleRefreshTimer();
+
+window.addEventListener('keydown', (event) => {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+  const key = event.key.toLowerCase();
+  if (key === 'r') refreshAll();
+  if (key === 'l') el.locateBtn.click();
+  if (key === 'f') el.filterInput.focus();
+  if (key === ' ') {
+    event.preventDefault();
+    if (radarAnimationTimer) {
+      clearInterval(radarAnimationTimer);
+      radarAnimationTimer = null;
+    } else {
+      startRadarAnimation();
+    }
+  }
+  if (key === '1') { el.speedSelect.value = '30'; minutesPerSecond = 30; startRadarAnimation(); }
+  if (key === '2') { el.speedSelect.value = '60'; minutesPerSecond = 60; startRadarAnimation(); }
+  if (key === '3') { el.speedSelect.value = '120'; minutesPerSecond = 120; startRadarAnimation(); }
+});
