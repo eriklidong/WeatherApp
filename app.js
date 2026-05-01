@@ -93,10 +93,37 @@ const overlays = {
   radar: null
 };
 
-el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
-el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
-el.criticalOnly.checked = localStorage.getItem(STORAGE_KEYS.criticalOnly) === 'true';
-el.refreshIntervalSelect.value = localStorage.getItem(STORAGE_KEYS.refreshInterval) || '300';
+function showInitializationError(message) {
+  const existing = document.getElementById('appInitError');
+  if (existing) {
+    existing.textContent = message;
+    return;
+  }
+  const container = document.createElement('div');
+  container.id = 'appInitError';
+  container.className = 'card';
+  container.setAttribute('role', 'alert');
+  container.style.margin = '1rem';
+  container.style.borderColor = '#ef4444';
+  container.textContent = message;
+  document.body.prepend(container);
+}
+
+function validateRequiredElements() {
+  const required = [
+    'alertMeta', 'radarStatus', 'alertsList', 'filterInput', 'includeWatches', 'criticalOnly', 'refreshBtn',
+    'locateBtn', 'frameSlider', 'opacitySlider', 'speedSelect', 'loopLatest', 'basemapSelect',
+    'refreshIntervalSelect', 'exportAlertsBtn', 'shortcutsBtn', 'shortcutsModal', 'closeShortcuts',
+    'alertTemplate', 'detailsModal', 'detailsTitle', 'detailsMeta', 'detailsText', 'detailsLink',
+    'closeDetails', 'activeCount', 'radarFrameMeta', 'updatedAt', 'favName', 'saveFavBtn', 'favoritesList', 'missionFeed'
+  ];
+  const missing = required.filter((key) => !el[key]);
+  if (!missing.length) return true;
+  const missingList = missing.join(', ');
+  console.error(`Weather app initialization failed. Missing required DOM elements: ${missingList}`);
+  showInitializationError('Weather Center could not initialize because some page elements are missing. Please reload or contact support.');
+  return false;
+}
 
 function colorForEvent(eventName = '') {
   if (eventName.includes('Tornado')) return '#ef4444';
@@ -317,43 +344,49 @@ async function refreshAll() {
   }
 }
 
-el.refreshBtn.addEventListener('click', refreshAll);
-el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
-el.includeWatches.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked)); refreshAll(); });
-el.criticalOnly.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.criticalOnly, String(el.criticalOnly.checked)); refreshAll(); });
-el.frameSlider.addEventListener('input', () => { if (radarAnimationTimer) clearInterval(radarAnimationTimer); setRadarFrame(Number(el.frameSlider.value)); });
-el.frameSlider.addEventListener('change', startRadarAnimation);
-el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
-el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
-el.loopLatest.addEventListener('change', () => { snapToLatest = el.loopLatest.checked; });
-el.basemapSelect.addEventListener('change', () => setBaseMap(el.basemapSelect.value));
-el.refreshIntervalSelect.addEventListener('change', () => {
-  localStorage.setItem(STORAGE_KEYS.refreshInterval, el.refreshIntervalSelect.value);
-  scheduleRefreshTimer();
-});
-el.exportAlertsBtn.addEventListener('click', exportAlertsCsv);
-el.shortcutsBtn.addEventListener('click', () => el.shortcutsModal.showModal());
-el.closeShortcuts.addEventListener('click', () => el.shortcutsModal.close());
-el.locateBtn.addEventListener('click', () => {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(({ coords }) => map.setView([coords.latitude, coords.longitude], 8));
-});
-el.closeDetails.addEventListener('click', () => el.detailsModal.close());
-el.saveFavBtn.addEventListener('click', () => {
-  const name = el.favName.value.trim() || `View ${new Date().toLocaleTimeString()}`;
-  const c = map.getCenter();
-  const favs = getFavorites();
-  favs.unshift({ name, lat: c.lat, lng: c.lng, zoom: map.getZoom() });
-  saveFavorites(favs.slice(0, 12));
-  el.favName.value = '';
+if (validateRequiredElements()) {
+  el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
+  el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
+  el.criticalOnly.checked = localStorage.getItem(STORAGE_KEYS.criticalOnly) === 'true';
+  el.refreshIntervalSelect.value = localStorage.getItem(STORAGE_KEYS.refreshInterval) || '300';
+
+  el.refreshBtn.addEventListener('click', refreshAll);
+  el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
+  el.includeWatches.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked)); refreshAll(); });
+  el.criticalOnly.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.criticalOnly, String(el.criticalOnly.checked)); refreshAll(); });
+  el.frameSlider.addEventListener('input', () => { if (radarAnimationTimer) clearInterval(radarAnimationTimer); setRadarFrame(Number(el.frameSlider.value)); });
+  el.frameSlider.addEventListener('change', startRadarAnimation);
+  el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
+  el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
+  el.loopLatest.addEventListener('change', () => { snapToLatest = el.loopLatest.checked; });
+  el.basemapSelect.addEventListener('change', () => setBaseMap(el.basemapSelect.value));
+  el.refreshIntervalSelect.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEYS.refreshInterval, el.refreshIntervalSelect.value);
+    scheduleRefreshTimer();
+  });
+  el.exportAlertsBtn.addEventListener('click', exportAlertsCsv);
+  el.shortcutsBtn.addEventListener('click', () => el.shortcutsModal.showModal());
+  el.closeShortcuts.addEventListener('click', () => el.shortcutsModal.close());
+  el.locateBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(({ coords }) => map.setView([coords.latitude, coords.longitude], 8));
+  });
+  el.closeDetails.addEventListener('click', () => el.detailsModal.close());
+  el.saveFavBtn.addEventListener('click', () => {
+    const name = el.favName.value.trim() || `View ${new Date().toLocaleTimeString()}`;
+    const c = map.getCenter();
+    const favs = getFavorites();
+    favs.unshift({ name, lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+    saveFavorites(favs.slice(0, 12));
+    el.favName.value = '';
+    renderFavorites();
+  });
+
   renderFavorites();
-});
+  refreshAll();
+  scheduleRefreshTimer();
 
-renderFavorites();
-refreshAll();
-scheduleRefreshTimer();
-
-window.addEventListener('keydown', (event) => {
+  window.addEventListener('keydown', (event) => {
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
   const key = event.key.toLowerCase();
   if (key === 'r') refreshAll();
@@ -371,4 +404,5 @@ window.addEventListener('keydown', (event) => {
   if (key === '1') { el.speedSelect.value = '30'; minutesPerSecond = 30; startRadarAnimation(); }
   if (key === '2') { el.speedSelect.value = '60'; minutesPerSecond = 60; startRadarAnimation(); }
   if (key === '3') { el.speedSelect.value = '120'; minutesPerSecond = 120; startRadarAnimation(); }
-});
+  });
+}
