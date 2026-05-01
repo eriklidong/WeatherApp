@@ -34,6 +34,7 @@ let radarOpacity = 0.6;
 let minutesPerSecond = 60;
 let snapToLatest = true;
 let refreshTimer = null;
+let pageHidden = document.hidden;
 
 const el = {
   alertMeta: document.getElementById('alertMeta'),
@@ -289,7 +290,7 @@ function setRadarFrame(index) {
 }
 
 function startRadarAnimation() {
-  if (radarAnimationTimer) clearInterval(radarAnimationTimer);
+  stopRadarAnimation();
   if (radarFrames.length < 2) return;
   const targetMsPerTick = minutesPerSecond * 60 * 1000;
   radarAnimationTimer = setInterval(() => {
@@ -299,6 +300,12 @@ function startRadarAnimation() {
     if (next === -1) next = 0;
     setRadarFrame(next);
   }, 1000);
+}
+
+function stopRadarAnimation() {
+  if (!radarAnimationTimer) return;
+  clearInterval(radarAnimationTimer);
+  radarAnimationTimer = null;
 }
 
 function getFavorites() {
@@ -329,8 +336,25 @@ function exportAlertsCsv() {
 }
 
 function scheduleRefreshTimer() {
-  if (refreshTimer) clearInterval(refreshTimer);
+  stopRefreshTimer();
   refreshTimer = setInterval(refreshAll, Number(el.refreshIntervalSelect.value) * 1000);
+}
+
+function stopRefreshTimer() {
+  if (!refreshTimer) return;
+  clearInterval(refreshTimer);
+  refreshTimer = null;
+}
+
+function stopAllTimers() {
+  stopRadarAnimation();
+  stopRefreshTimer();
+}
+
+function startAllTimers({ immediateRefresh = false } = {}) {
+  startRadarAnimation();
+  scheduleRefreshTimer();
+  if (immediateRefresh) refreshAll();
 }
 function saveFavorites(favs) { localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favs)); }
 function renderFavorites() {
@@ -378,11 +402,37 @@ async function refreshAll() {
   }
 }
 
-if (validateRequiredElements()) {
-  el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
-  el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
-  el.criticalOnly.checked = localStorage.getItem(STORAGE_KEYS.criticalOnly) === 'true';
-  el.refreshIntervalSelect.value = localStorage.getItem(STORAGE_KEYS.refreshInterval) || '300';
+el.refreshBtn.addEventListener('click', refreshAll);
+el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
+el.includeWatches.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked)); refreshAll(); });
+el.criticalOnly.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.criticalOnly, String(el.criticalOnly.checked)); refreshAll(); });
+el.frameSlider.addEventListener('input', () => { stopRadarAnimation(); setRadarFrame(Number(el.frameSlider.value)); });
+el.frameSlider.addEventListener('change', startRadarAnimation);
+el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
+el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
+el.loopLatest.addEventListener('change', () => { snapToLatest = el.loopLatest.checked; });
+el.basemapSelect.addEventListener('change', () => setBaseMap(el.basemapSelect.value));
+el.refreshIntervalSelect.addEventListener('change', () => {
+  localStorage.setItem(STORAGE_KEYS.refreshInterval, el.refreshIntervalSelect.value);
+  scheduleRefreshTimer();
+});
+el.exportAlertsBtn.addEventListener('click', exportAlertsCsv);
+el.shortcutsBtn.addEventListener('click', () => el.shortcutsModal.showModal());
+el.closeShortcuts.addEventListener('click', () => el.shortcutsModal.close());
+el.locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(({ coords }) => map.setView([coords.latitude, coords.longitude], 8));
+});
+el.closeDetails.addEventListener('click', () => el.detailsModal.close());
+el.saveFavBtn.addEventListener('click', () => {
+  const name = el.favName.value.trim() || `View ${new Date().toLocaleTimeString()}`;
+  const c = map.getCenter();
+  const favs = getFavorites();
+  favs.unshift({ name, lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+  saveFavorites(favs.slice(0, 12));
+  el.favName.value = '';
+  renderFavorites();
+});
 
   el.refreshBtn.addEventListener('click', refreshAll);
   el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
@@ -416,11 +466,16 @@ if (validateRequiredElements()) {
     renderFavorites();
   });
 
-  renderFavorites();
-  refreshAll();
-  scheduleRefreshTimer();
+document.addEventListener('visibilitychange', () => {
+  pageHidden = document.hidden;
+  if (pageHidden) {
+    stopAllTimers();
+    return;
+  }
+  startAllTimers({ immediateRefresh: true });
+});
 
-  window.addEventListener('keydown', (event) => {
+window.addEventListener('keydown', (event) => {
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
   const key = event.key.toLowerCase();
   if (key === 'r') refreshAll();
@@ -429,8 +484,7 @@ if (validateRequiredElements()) {
   if (key === ' ') {
     event.preventDefault();
     if (radarAnimationTimer) {
-      clearInterval(radarAnimationTimer);
-      radarAnimationTimer = null;
+      stopRadarAnimation();
     } else {
       startRadarAnimation();
     }
