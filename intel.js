@@ -28,11 +28,24 @@ async function geocodeLocation(query) {
 
 async function fetchForecast(lat, lon) {
   const pointRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
+  if (!pointRes.ok) {
+    if (pointRes.status === 400 || pointRes.status === 404 || pointRes.status === 422) {
+      throw new Error('Invalid location. Please enter a valid city, state, or ZIP code.');
+    }
+    throw new Error(`Weather service is temporarily unavailable (status ${pointRes.status}) for coordinates ${lat}, ${lon}.`);
+  }
+
   const point = await pointRes.json();
   const forecastUrl = point.properties?.forecast;
   const hourlyUrl = point.properties?.forecastHourly;
-  if (!forecastUrl || !hourlyUrl) throw new Error('Forecast endpoint unavailable');
-  const [forecast, hourly] = await Promise.all([fetch(forecastUrl).then((r) => r.json()), fetch(hourlyUrl).then((r) => r.json())]);
+  if (!forecastUrl || !hourlyUrl) throw new Error('Weather forecast data is currently unavailable. Please try again later.');
+
+  const [forecastRes, hourlyRes] = await Promise.all([fetch(forecastUrl), fetch(hourlyUrl)]);
+  if (!forecastRes.ok || !hourlyRes.ok) {
+    throw new Error('Weather provider API is temporarily unavailable. Please try again in a few minutes.');
+  }
+
+  const [forecast, hourly] = await Promise.all([forecastRes.json(), hourlyRes.json()]);
   return { forecast: forecast.properties?.periods || [], hourly: hourly.properties?.periods || [] };
 }
 
