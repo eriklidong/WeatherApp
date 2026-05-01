@@ -56,7 +56,27 @@ async function loadHazards() {
   const data = await r.json();
   const hazards = (data.features || []).filter((f) => /watch|warning/i.test(f.properties?.event || ''));
   el.hazardMeta.textContent = `${hazards.length} current hazard headlines`;
-  el.hazardsList.innerHTML = hazards.slice(0, 30).map((h) => `<article class="alert-item"><h3>${h.properties.event}</h3><p class="alert-area">${h.properties.areaDesc}</p><p class="alert-time">Expires: ${h.properties.expires ? new Date(h.properties.expires).toLocaleString() : 'N/A'}</p></article>`).join('');
+  el.hazardsList.innerHTML = '';
+
+  hazards.slice(0, 30).forEach((h) => {
+    const props = h.properties || {};
+    const article = document.createElement('article');
+    article.className = 'alert-item';
+
+    const title = document.createElement('h3');
+    title.textContent = props.event || 'Hazard';
+
+    const area = document.createElement('p');
+    area.className = 'alert-area';
+    area.textContent = props.areaDesc || 'Unknown area';
+
+    const expires = document.createElement('p');
+    expires.className = 'alert-time';
+    expires.textContent = `Expires: ${props.expires ? new Date(props.expires).toLocaleString() : 'N/A'}`;
+
+    article.append(title, area, expires);
+    el.hazardsList.appendChild(article);
+  });
 }
 
 el.lookupBtn.addEventListener('click', async () => {

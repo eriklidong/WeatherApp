@@ -169,12 +169,40 @@ function renderMissionFeed() {
   const latest = [...allAlerts]
     .sort((a, b) => new Date(b.properties?.sent || 0) - new Date(a.properties?.sent || 0))
     .slice(0, 18);
-  el.missionFeed.innerHTML = latest.length
-    ? latest.map((item) => {
-      const p = item.properties || {};
-      return `<article class="alert-item"><h3>${p.event || 'Alert'}</h3><p class="alert-area">${p.areaDesc || 'Unknown area'}</p><p class="alert-time">Sent: ${p.sent ? new Date(p.sent).toLocaleString() : 'N/A'}</p><p class="alert-headline">${p.headline || ''}</p></article>`;
-    }).join('')
-    : '<p class="empty">No active warning feed right now.</p>';
+
+  el.missionFeed.innerHTML = '';
+
+  if (!latest.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'No active warning feed right now.';
+    el.missionFeed.appendChild(empty);
+    return;
+  }
+
+  latest.forEach((item) => {
+    const p = item.properties || {};
+    const article = document.createElement('article');
+    article.className = 'alert-item';
+
+    const title = document.createElement('h3');
+    title.textContent = p.event || 'Alert';
+
+    const area = document.createElement('p');
+    area.className = 'alert-area';
+    area.textContent = p.areaDesc || 'Unknown area';
+
+    const time = document.createElement('p');
+    time.className = 'alert-time';
+    time.textContent = `Sent: ${p.sent ? new Date(p.sent).toLocaleString() : 'N/A'}`;
+
+    const headline = document.createElement('p');
+    headline.className = 'alert-headline';
+    headline.textContent = p.headline || '';
+
+    article.append(title, area, time, headline);
+    el.missionFeed.appendChild(article);
+  });
 }
 
 function areaTokenSet(feature) {
