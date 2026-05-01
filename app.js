@@ -305,14 +305,20 @@ function getFavorites() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.favorites) || '[]'); } catch { return []; }
 }
 
+function escapeCsvField(value) {
+  const normalized = String(value ?? '').replace(/\r\n?/g, '\n');
+  return `"${normalized.replaceAll('"', '""')}"`;
+}
+
 function exportAlertsCsv() {
   if (!allAlerts.length) return;
   const headers = ['event', 'severity', 'area', 'sent', 'expires', 'headline'];
   const rows = allAlerts.map((item) => {
     const p = item.properties || {};
-    return [p.event, p.severity, p.areaDesc, p.sent, p.expires, (p.headline || '').replaceAll('\"', '\"\"')];
+    return [p.event, p.severity, p.areaDesc, p.sent, p.expires, p.headline];
   });
-  const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `\"${String(v || '')}\"`).join(','))].join('\n');
+  // Quote every field and escape embedded quotes/newlines for RFC 4180-compatible CSV output.
+  const csv = [headers.map(escapeCsvField).join(','), ...rows.map((row) => row.map(escapeCsvField).join(','))].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
