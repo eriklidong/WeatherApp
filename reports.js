@@ -6,9 +6,32 @@ const el = {
 };
 
 async function loadAnalytics() {
-  try {
-    const r = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
-    if (!r.ok) throw new Error(`Analytics request failed (${r.status})`);
+  const r = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
+  const data = await r.json();
+  const features = data.features || [];
+  const now = Date.now();
+  const since24h = now - 24 * 60 * 60 * 1000;
+  const recent = features.filter((f) => new Date(f.properties?.sent || 0).getTime() >= since24h);
+  const severe = features.filter((f) => ['Severe', 'Extreme'].includes(f.properties?.severity));
+  el.analyticsMeta.textContent = `${features.length} active | ${recent.length} issued in last 24h`;
+
+  const renderSummaryItem = (label, value) => {
+    const article = document.createElement('article');
+    article.className = 'favorite-item';
+    const strong = document.createElement('strong');
+    strong.textContent = label;
+    const span = document.createElement('span');
+    span.textContent = String(value);
+    article.append(strong, span);
+    return article;
+  };
+
+  el.analyticsSummary.innerHTML = '';
+  el.analyticsSummary.append(
+    renderSummaryItem('Total Active', features.length),
+    renderSummaryItem('Severe/Extreme', severe.length),
+    renderSummaryItem('Last 24h Issued', recent.length)
+  );
 
     const data = await r.json();
     const features = data.features || [];
@@ -23,32 +46,26 @@ async function loadAnalytics() {
       <article class="favorite-item"><strong>Last 24h Issued</strong><span>${recent.length}</span></article>
     `;
 
-    const areaCounts = {};
-    const eventCounts = {};
-    features.forEach((f) => {
-      const area = (f.properties?.areaDesc || 'Unknown').split(';')[0].trim();
-      areaCounts[area] = (areaCounts[area] || 0) + 1;
-      const event = f.properties?.event || 'Unknown';
-      eventCounts[event] = (eventCounts[event] || 0) + 1;
-    });
+  const renderCountList = (container, entries) => {
+    container.innerHTML = '';
+    entries.forEach(([label, count]) => {
+      const article = document.createElement('article');
+      article.className = 'alert-item';
 
-    el.topAreas.innerHTML = Object.entries(areaCounts).length
-      ? Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([area, count]) => `<article class="alert-item"><h3>${area}</h3><p class="alert-time">${count} active alerts</p></article>`).join('')
-      : '<article class="alert-item"><h3>No areas to display</h3><p class="alert-time">No active alerts are currently available.</p></article>';
-    el.eventBreakdown.innerHTML = Object.entries(eventCounts).length
-      ? Object.entries(eventCounts).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([event, count]) => `<article class="alert-item"><h3>${event}</h3><p class="alert-time">${count} active alerts</p></article>`).join('')
-      : '<article class="alert-item"><h3>No event types to display</h3><p class="alert-time">No active alerts are currently available.</p></article>';
-  } catch (error) {
-    console.error('Unable to load analytics:', error);
-    el.analyticsMeta.textContent = 'Analytics unavailable';
-    el.analyticsSummary.innerHTML = `
-      <article class="favorite-item"><strong>Total Active</strong><span>—</span></article>
-      <article class="favorite-item"><strong>Severe/Extreme</strong><span>—</span></article>
-      <article class="favorite-item"><strong>Last 24h Issued</strong><span>—</span></article>
-    `;
-    el.topAreas.innerHTML = '<article class="alert-item"><h3>Area analytics unavailable</h3><p class="alert-time">We could not load area alert analytics right now.</p></article>';
-    el.eventBreakdown.innerHTML = '<article class="alert-item"><h3>Event analytics unavailable</h3><p class="alert-time">We could not load event analytics right now.</p></article>';
-  }
+      const title = document.createElement('h3');
+      title.textContent = label;
+
+      const meta = document.createElement('p');
+      meta.className = 'alert-time';
+      meta.textContent = `${count} active alerts`;
+
+      article.append(title, meta);
+      container.appendChild(article);
+    });
+  };
+
+  renderCountList(el.topAreas, Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).slice(0, 20));
+  renderCountList(el.eventBreakdown, Object.entries(eventCounts).sort((a, b) => b[1] - a[1]).slice(0, 25));
 }
 
 loadAnalytics();
