@@ -9,30 +9,71 @@ const el = {
 };
 
 async function geocodeLocation(query) {
+  const normalizedQuery = query.trim().toLowerCase().replace(/\s+/g, ' ');
+  const cacheKey = `geocode:${normalizedQuery}`;
+  const memoryCache = geocodeLocation._cache || (geocodeLocation._cache = new Map());
+
+  if (memoryCache.has(cacheKey)) return memoryCache.get(cacheKey);
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      memoryCache.set(cacheKey, parsed);
+      return parsed;
+    }
+  } catch (_) {
+    // Ignore localStorage/JSON errors and continue with live lookup.
+  }
+
+  const remember = (result) => {
+    memoryCache.set(cacheKey, result);
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(result));
+    } catch (_) {
+      // Ignore localStorage quota/private mode errors.
+    }
+    return result;
+  };
+
   const openMeteo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
   if (openMeteo.ok) {
     const data = await openMeteo.json();
     const first = data.results?.[0];
     if (first) {
       const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
-      return { lat: Number(first.latitude), lon: Number(first.longitude), name: label };
+      return remember({ lat: Number(first.latitude), lon: Number(first.longitude), name: label });
     }
   }
 
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+  const geocoderProxyUrl = window.__GEOCODER_PROXY_URL__ || '/api/geocode';
+  const r = await fetch(`${geocoderProxyUrl}?q=${encodeURIComponent(query)}&limit=1`);
   if (!r.ok) throw new Error('Could not geocode location');
   const rows = await r.json();
   if (!rows.length) throw new Error('Location not found');
-  return { lat: Number(rows[0].lat), lon: Number(rows[0].lon), name: rows[0].display_name };
+  return remember({ lat: Number(rows[0].lat), lon: Number(rows[0].lon), name: rows[0].display_name });
 }
 
 async function fetchForecast(lat, lon) {
   const pointRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
+  if (!pointRes.ok) {
+    if (pointRes.status === 400 || pointRes.status === 404 || pointRes.status === 422) {
+      throw new Error('Invalid location. Please enter a valid city, state, or ZIP code.');
+    }
+    throw new Error(`Weather service is temporarily unavailable (status ${pointRes.status}) for coordinates ${lat}, ${lon}.`);
+  }
+
   const point = await pointRes.json();
   const forecastUrl = point.properties?.forecast;
   const hourlyUrl = point.properties?.forecastHourly;
-  if (!forecastUrl || !hourlyUrl) throw new Error('Forecast endpoint unavailable');
-  const [forecast, hourly] = await Promise.all([fetch(forecastUrl).then((r) => r.json()), fetch(hourlyUrl).then((r) => r.json())]);
+  if (!forecastUrl || !hourlyUrl) throw new Error('Weather forecast data is currently unavailable. Please try again later.');
+
+  const [forecastRes, hourlyRes] = await Promise.all([fetch(forecastUrl), fetch(hourlyUrl)]);
+  if (!forecastRes.ok || !hourlyRes.ok) {
+    throw new Error('Weather provider API is temporarily unavailable. Please try again in a few minutes.');
+  }
+
+  const [forecast, hourly] = await Promise.all([forecastRes.json(), hourlyRes.json()]);
   return { forecast: forecast.properties?.periods || [], hourly: hourly.properties?.periods || [] };
 }
 
@@ -56,7 +97,27 @@ async function loadHazards() {
   const data = await r.json();
   const hazards = (data.features || []).filter((f) => /watch|warning/i.test(f.properties?.event || ''));
   el.hazardMeta.textContent = `${hazards.length} current hazard headlines`;
-  el.hazardsList.innerHTML = hazards.slice(0, 30).map((h) => `<article class="alert-item"><h3>${h.properties.event}</h3><p class="alert-area">${h.properties.areaDesc}</p><p class="alert-time">Expires: ${h.properties.expires ? new Date(h.properties.expires).toLocaleString() : 'N/A'}</p></article>`).join('');
+  el.hazardsList.innerHTML = '';
+
+  hazards.slice(0, 30).forEach((h) => {
+    const props = h.properties || {};
+    const article = document.createElement('article');
+    article.className = 'alert-item';
+
+    const title = document.createElement('h3');
+    title.textContent = props.event || 'Hazard';
+
+    const area = document.createElement('p');
+    area.className = 'alert-area';
+    area.textContent = props.areaDesc || 'Unknown area';
+
+    const expires = document.createElement('p');
+    expires.className = 'alert-time';
+    expires.textContent = `Expires: ${props.expires ? new Date(props.expires).toLocaleString() : 'N/A'}`;
+
+    article.append(title, area, expires);
+    el.hazardsList.appendChild(article);
+  });
 }
 
 el.lookupBtn.addEventListener('click', async () => {
