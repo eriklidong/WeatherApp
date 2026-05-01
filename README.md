@@ -44,7 +44,10 @@ http://localhost:4173
 5. Add environment variables in Vercel project settings:
    - `NEXT_PUBLIC_SUPABASE_URL` = your Supabase project URL
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = your Supabase anon key
+   - **Do not add or expose `SUPABASE_SERVICE_ROLE_KEY` to client-facing endpoints.**
 6. Click **Deploy**.
+
+> Security note: `/api/config` is a public endpoint used by browser clients and must only return `NEXT_PUBLIC_*` values such as the anon key. Never return service-role keys or any other privileged secrets from this endpoint.
 
 ### 3) Verify deployment
 After deployment:
