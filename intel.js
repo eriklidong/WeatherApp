@@ -9,21 +9,49 @@ const el = {
 };
 
 async function geocodeLocation(query) {
+  const normalizedQuery = query.trim().toLowerCase().replace(/\s+/g, ' ');
+  const cacheKey = `geocode:${normalizedQuery}`;
+  const memoryCache = geocodeLocation._cache || (geocodeLocation._cache = new Map());
+
+  if (memoryCache.has(cacheKey)) return memoryCache.get(cacheKey);
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      memoryCache.set(cacheKey, parsed);
+      return parsed;
+    }
+  } catch (_) {
+    // Ignore localStorage/JSON errors and continue with live lookup.
+  }
+
+  const remember = (result) => {
+    memoryCache.set(cacheKey, result);
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(result));
+    } catch (_) {
+      // Ignore localStorage quota/private mode errors.
+    }
+    return result;
+  };
+
   const openMeteo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
   if (openMeteo.ok) {
     const data = await openMeteo.json();
     const first = data.results?.[0];
     if (first) {
       const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
-      return { lat: Number(first.latitude), lon: Number(first.longitude), name: label };
+      return remember({ lat: Number(first.latitude), lon: Number(first.longitude), name: label });
     }
   }
 
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+  const geocoderProxyUrl = window.__GEOCODER_PROXY_URL__ || '/api/geocode';
+  const r = await fetch(`${geocoderProxyUrl}?q=${encodeURIComponent(query)}&limit=1`);
   if (!r.ok) throw new Error('Could not geocode location');
   const rows = await r.json();
   if (!rows.length) throw new Error('Location not found');
-  return { lat: Number(rows[0].lat), lon: Number(rows[0].lon), name: rows[0].display_name };
+  return remember({ lat: Number(rows[0].lat), lon: Number(rows[0].lon), name: rows[0].display_name });
 }
 
 async function fetchForecast(lat, lon) {
