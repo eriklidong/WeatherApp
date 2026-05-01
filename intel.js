@@ -52,11 +52,25 @@ function renderHourly(hourly) {
 }
 
 async function loadHazards() {
-  const r = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
-  const data = await r.json();
-  const hazards = (data.features || []).filter((f) => /watch|warning/i.test(f.properties?.event || ''));
-  el.hazardMeta.textContent = `${hazards.length} current hazard headlines`;
-  el.hazardsList.innerHTML = hazards.slice(0, 30).map((h) => `<article class="alert-item"><h3>${h.properties.event}</h3><p class="alert-area">${h.properties.areaDesc}</p><p class="alert-time">Expires: ${h.properties.expires ? new Date(h.properties.expires).toLocaleString() : 'N/A'}</p></article>`).join('');
+  try {
+    const r = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
+    if (!r.ok) throw new Error(`Hazards request failed (${r.status})`);
+
+    const data = await r.json();
+    const hazards = (data.features || []).filter((f) => /watch|warning/i.test(f.properties?.event || ''));
+
+    el.hazardMeta.textContent = `${hazards.length} current hazard headlines`;
+    el.hazardsList.innerHTML = hazards.length
+      ? hazards
+          .slice(0, 30)
+          .map((h) => `<article class="alert-item"><h3>${h.properties.event}</h3><p class="alert-area">${h.properties.areaDesc}</p><p class="alert-time">Expires: ${h.properties.expires ? new Date(h.properties.expires).toLocaleString() : 'N/A'}</p></article>`)
+          .join('')
+      : '<article class="alert-item"><h3>No hazard alerts currently listed</h3><p class="alert-time">There are no active watch or warning headlines right now.</p></article>';
+  } catch (error) {
+    console.error('Unable to load hazards:', error);
+    el.hazardMeta.textContent = 'Hazard data unavailable';
+    el.hazardsList.innerHTML = '<article class="alert-item"><h3>Hazards unavailable</h3><p class="alert-time">We could not load active watch/warning headlines right now. Please try again shortly.</p></article>';
+  }
 }
 
 el.lookupBtn.addEventListener('click', async () => {
