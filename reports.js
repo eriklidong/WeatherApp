@@ -14,23 +14,58 @@ async function loadAnalytics() {
   const recent = features.filter((f) => new Date(f.properties?.sent || 0).getTime() >= since24h);
   const severe = features.filter((f) => ['Severe', 'Extreme'].includes(f.properties?.severity));
   el.analyticsMeta.textContent = `${features.length} active | ${recent.length} issued in last 24h`;
-  el.analyticsSummary.innerHTML = `
-    <article class="favorite-item"><strong>Total Active</strong><span>${features.length}</span></article>
-    <article class="favorite-item"><strong>Severe/Extreme</strong><span>${severe.length}</span></article>
-    <article class="favorite-item"><strong>Last 24h Issued</strong><span>${recent.length}</span></article>
-  `;
 
-  const areaCounts = {};
-  const eventCounts = {};
-  features.forEach((f) => {
-    const area = (f.properties?.areaDesc || 'Unknown').split(';')[0].trim();
-    areaCounts[area] = (areaCounts[area] || 0) + 1;
-    const event = f.properties?.event || 'Unknown';
-    eventCounts[event] = (eventCounts[event] || 0) + 1;
-  });
+  const renderSummaryItem = (label, value) => {
+    const article = document.createElement('article');
+    article.className = 'favorite-item';
+    const strong = document.createElement('strong');
+    strong.textContent = label;
+    const span = document.createElement('span');
+    span.textContent = String(value);
+    article.append(strong, span);
+    return article;
+  };
 
-  el.topAreas.innerHTML = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([area, count]) => `<article class="alert-item"><h3>${area}</h3><p class="alert-time">${count} active alerts</p></article>`).join('');
-  el.eventBreakdown.innerHTML = Object.entries(eventCounts).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([event, count]) => `<article class="alert-item"><h3>${event}</h3><p class="alert-time">${count} active alerts</p></article>`).join('');
+  el.analyticsSummary.innerHTML = '';
+  el.analyticsSummary.append(
+    renderSummaryItem('Total Active', features.length),
+    renderSummaryItem('Severe/Extreme', severe.length),
+    renderSummaryItem('Last 24h Issued', recent.length)
+  );
+
+    const data = await r.json();
+    const features = data.features || [];
+    const now = Date.now();
+    const since24h = now - 24 * 60 * 60 * 1000;
+    const recent = features.filter((f) => new Date(f.properties?.sent || 0).getTime() >= since24h);
+    const severe = features.filter((f) => ['Severe', 'Extreme'].includes(f.properties?.severity));
+    el.analyticsMeta.textContent = `${features.length} active | ${recent.length} issued in last 24h`;
+    el.analyticsSummary.innerHTML = `
+      <article class="favorite-item"><strong>Total Active</strong><span>${features.length}</span></article>
+      <article class="favorite-item"><strong>Severe/Extreme</strong><span>${severe.length}</span></article>
+      <article class="favorite-item"><strong>Last 24h Issued</strong><span>${recent.length}</span></article>
+    `;
+
+  const renderCountList = (container, entries) => {
+    container.innerHTML = '';
+    entries.forEach(([label, count]) => {
+      const article = document.createElement('article');
+      article.className = 'alert-item';
+
+      const title = document.createElement('h3');
+      title.textContent = label;
+
+      const meta = document.createElement('p');
+      meta.className = 'alert-time';
+      meta.textContent = `${count} active alerts`;
+
+      article.append(title, meta);
+      container.appendChild(article);
+    });
+  };
+
+  renderCountList(el.topAreas, Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).slice(0, 20));
+  renderCountList(el.eventBreakdown, Object.entries(eventCounts).sort((a, b) => b[1] - a[1]).slice(0, 25));
 }
 
 loadAnalytics();

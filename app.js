@@ -94,10 +94,37 @@ const overlays = {
   radar: null
 };
 
-el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
-el.includeWatches.checked = localStorage.getItem(STORAGE_KEYS.includeWatches) === 'true';
-el.criticalOnly.checked = localStorage.getItem(STORAGE_KEYS.criticalOnly) === 'true';
-el.refreshIntervalSelect.value = localStorage.getItem(STORAGE_KEYS.refreshInterval) || '300';
+function showInitializationError(message) {
+  const existing = document.getElementById('appInitError');
+  if (existing) {
+    existing.textContent = message;
+    return;
+  }
+  const container = document.createElement('div');
+  container.id = 'appInitError';
+  container.className = 'card';
+  container.setAttribute('role', 'alert');
+  container.style.margin = '1rem';
+  container.style.borderColor = '#ef4444';
+  container.textContent = message;
+  document.body.prepend(container);
+}
+
+function validateRequiredElements() {
+  const required = [
+    'alertMeta', 'radarStatus', 'alertsList', 'filterInput', 'includeWatches', 'criticalOnly', 'refreshBtn',
+    'locateBtn', 'frameSlider', 'opacitySlider', 'speedSelect', 'loopLatest', 'basemapSelect',
+    'refreshIntervalSelect', 'exportAlertsBtn', 'shortcutsBtn', 'shortcutsModal', 'closeShortcuts',
+    'alertTemplate', 'detailsModal', 'detailsTitle', 'detailsMeta', 'detailsText', 'detailsLink',
+    'closeDetails', 'activeCount', 'radarFrameMeta', 'updatedAt', 'favName', 'saveFavBtn', 'favoritesList', 'missionFeed'
+  ];
+  const missing = required.filter((key) => !el[key]);
+  if (!missing.length) return true;
+  const missingList = missing.join(', ');
+  console.error(`Weather app initialization failed. Missing required DOM elements: ${missingList}`);
+  showInitializationError('Weather Center could not initialize because some page elements are missing. Please reload or contact support.');
+  return false;
+}
 
 function colorForEvent(eventName = '') {
   if (eventName.includes('Tornado')) return '#ef4444';
@@ -170,12 +197,40 @@ function renderMissionFeed() {
   const latest = [...allAlerts]
     .sort((a, b) => new Date(b.properties?.sent || 0) - new Date(a.properties?.sent || 0))
     .slice(0, 18);
-  el.missionFeed.innerHTML = latest.length
-    ? latest.map((item) => {
-      const p = item.properties || {};
-      return `<article class="alert-item"><h3>${p.event || 'Alert'}</h3><p class="alert-area">${p.areaDesc || 'Unknown area'}</p><p class="alert-time">Sent: ${p.sent ? new Date(p.sent).toLocaleString() : 'N/A'}</p><p class="alert-headline">${p.headline || ''}</p></article>`;
-    }).join('')
-    : '<p class="empty">No active warning feed right now.</p>';
+
+  el.missionFeed.innerHTML = '';
+
+  if (!latest.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'No active warning feed right now.';
+    el.missionFeed.appendChild(empty);
+    return;
+  }
+
+  latest.forEach((item) => {
+    const p = item.properties || {};
+    const article = document.createElement('article');
+    article.className = 'alert-item';
+
+    const title = document.createElement('h3');
+    title.textContent = p.event || 'Alert';
+
+    const area = document.createElement('p');
+    area.className = 'alert-area';
+    area.textContent = p.areaDesc || 'Unknown area';
+
+    const time = document.createElement('p');
+    time.className = 'alert-time';
+    time.textContent = `Sent: ${p.sent ? new Date(p.sent).toLocaleString() : 'N/A'}`;
+
+    const headline = document.createElement('p');
+    headline.className = 'alert-headline';
+    headline.textContent = p.headline || '';
+
+    article.append(title, area, time, headline);
+    el.missionFeed.appendChild(article);
+  });
 }
 
 function areaTokenSet(feature) {
@@ -257,14 +312,20 @@ function getFavorites() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.favorites) || '[]'); } catch { return []; }
 }
 
+function escapeCsvField(value) {
+  const normalized = String(value ?? '').replace(/\r\n?/g, '\n');
+  return `"${normalized.replaceAll('"', '""')}"`;
+}
+
 function exportAlertsCsv() {
   if (!allAlerts.length) return;
   const headers = ['event', 'severity', 'area', 'sent', 'expires', 'headline'];
   const rows = allAlerts.map((item) => {
     const p = item.properties || {};
-    return [p.event, p.severity, p.areaDesc, p.sent, p.expires, (p.headline || '').replaceAll('\"', '\"\"')];
+    return [p.event, p.severity, p.areaDesc, p.sent, p.expires, p.headline];
   });
-  const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `\"${String(v || '')}\"`).join(','))].join('\n');
+  // Quote every field and escape embedded quotes/newlines for RFC 4180-compatible CSV output.
+  const csv = [headers.map(escapeCsvField).join(','), ...rows.map((row) => row.map(escapeCsvField).join(','))].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -373,9 +434,37 @@ el.saveFavBtn.addEventListener('click', () => {
   renderFavorites();
 });
 
-renderFavorites();
-refreshAll();
-scheduleRefreshTimer();
+  el.refreshBtn.addEventListener('click', refreshAll);
+  el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
+  el.includeWatches.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked)); refreshAll(); });
+  el.criticalOnly.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.criticalOnly, String(el.criticalOnly.checked)); refreshAll(); });
+  el.frameSlider.addEventListener('input', () => { if (radarAnimationTimer) clearInterval(radarAnimationTimer); setRadarFrame(Number(el.frameSlider.value)); });
+  el.frameSlider.addEventListener('change', startRadarAnimation);
+  el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
+  el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
+  el.loopLatest.addEventListener('change', () => { snapToLatest = el.loopLatest.checked; });
+  el.basemapSelect.addEventListener('change', () => setBaseMap(el.basemapSelect.value));
+  el.refreshIntervalSelect.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEYS.refreshInterval, el.refreshIntervalSelect.value);
+    scheduleRefreshTimer();
+  });
+  el.exportAlertsBtn.addEventListener('click', exportAlertsCsv);
+  el.shortcutsBtn.addEventListener('click', () => el.shortcutsModal.showModal());
+  el.closeShortcuts.addEventListener('click', () => el.shortcutsModal.close());
+  el.locateBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(({ coords }) => map.setView([coords.latitude, coords.longitude], 8));
+  });
+  el.closeDetails.addEventListener('click', () => el.detailsModal.close());
+  el.saveFavBtn.addEventListener('click', () => {
+    const name = el.favName.value.trim() || `View ${new Date().toLocaleTimeString()}`;
+    const c = map.getCenter();
+    const favs = getFavorites();
+    favs.unshift({ name, lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+    saveFavorites(favs.slice(0, 12));
+    el.favName.value = '';
+    renderFavorites();
+  });
 
 document.addEventListener('visibilitychange', () => {
   pageHidden = document.hidden;
@@ -403,4 +492,5 @@ window.addEventListener('keydown', (event) => {
   if (key === '1') { el.speedSelect.value = '30'; minutesPerSecond = 30; startRadarAnimation(); }
   if (key === '2') { el.speedSelect.value = '60'; minutesPerSecond = 60; startRadarAnimation(); }
   if (key === '3') { el.speedSelect.value = '120'; minutesPerSecond = 120; startRadarAnimation(); }
-});
+  });
+}
