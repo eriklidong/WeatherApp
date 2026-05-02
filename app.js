@@ -402,43 +402,12 @@ async function refreshAll() {
   }
 }
 
-el.refreshBtn.addEventListener('click', refreshAll);
-el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
-el.includeWatches.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked)); refreshAll(); });
-el.criticalOnly.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.criticalOnly, String(el.criticalOnly.checked)); refreshAll(); });
-el.frameSlider.addEventListener('input', () => { stopRadarAnimation(); setRadarFrame(Number(el.frameSlider.value)); });
-el.frameSlider.addEventListener('change', startRadarAnimation);
-el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
-el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
-el.loopLatest.addEventListener('change', () => { snapToLatest = el.loopLatest.checked; });
-el.basemapSelect.addEventListener('change', () => setBaseMap(el.basemapSelect.value));
-el.refreshIntervalSelect.addEventListener('change', () => {
-  localStorage.setItem(STORAGE_KEYS.refreshInterval, el.refreshIntervalSelect.value);
-  scheduleRefreshTimer();
-});
-el.exportAlertsBtn.addEventListener('click', exportAlertsCsv);
-el.shortcutsBtn.addEventListener('click', () => el.shortcutsModal.showModal());
-el.closeShortcuts.addEventListener('click', () => el.shortcutsModal.close());
-el.locateBtn.addEventListener('click', () => {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(({ coords }) => map.setView([coords.latitude, coords.longitude], 8));
-});
-el.closeDetails.addEventListener('click', () => el.detailsModal.close());
-el.saveFavBtn.addEventListener('click', () => {
-  const name = el.favName.value.trim() || `View ${new Date().toLocaleTimeString()}`;
-  const c = map.getCenter();
-  const favs = getFavorites();
-  favs.unshift({ name, lat: c.lat, lng: c.lng, zoom: map.getZoom() });
-  saveFavorites(favs.slice(0, 12));
-  el.favName.value = '';
-  renderFavorites();
-});
-
+function registerUiListeners() {
   el.refreshBtn.addEventListener('click', refreshAll);
   el.filterInput.addEventListener('input', () => { localStorage.setItem(STORAGE_KEYS.filter, el.filterInput.value); renderAlerts(); });
   el.includeWatches.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.includeWatches, String(el.includeWatches.checked)); refreshAll(); });
   el.criticalOnly.addEventListener('change', () => { localStorage.setItem(STORAGE_KEYS.criticalOnly, String(el.criticalOnly.checked)); refreshAll(); });
-  el.frameSlider.addEventListener('input', () => { if (radarAnimationTimer) clearInterval(radarAnimationTimer); setRadarFrame(Number(el.frameSlider.value)); });
+  el.frameSlider.addEventListener('input', () => { stopRadarAnimation(); setRadarFrame(Number(el.frameSlider.value)); });
   el.frameSlider.addEventListener('change', startRadarAnimation);
   el.opacitySlider.addEventListener('input', () => { radarOpacity = Number(el.opacitySlider.value); setRadarFrame(currentFrameIndex); });
   el.speedSelect.addEventListener('change', () => { minutesPerSecond = Number(el.speedSelect.value); startRadarAnimation(); });
@@ -466,30 +435,54 @@ el.saveFavBtn.addEventListener('click', () => {
     renderFavorites();
   });
 
-document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', () => {
+    pageHidden = document.hidden;
+    if (pageHidden) {
+      stopAllTimers();
+      return;
+    }
+    startAllTimers({ immediateRefresh: true });
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+    const key = event.key.toLowerCase();
+    if (key === 'r') refreshAll();
+    if (key === 'l') el.locateBtn.click();
+    if (key === 'f') el.filterInput.focus();
+    if (key === ' ') {
+      event.preventDefault();
+      if (radarAnimationTimer) {
+        stopRadarAnimation();
+      } else {
+        startRadarAnimation();
+      }
+    }
+    if (key === '1') { el.speedSelect.value = '30'; minutesPerSecond = 30; startRadarAnimation(); }
+    if (key === '2') { el.speedSelect.value = '60'; minutesPerSecond = 60; startRadarAnimation(); }
+    if (key === '3') { el.speedSelect.value = '120'; minutesPerSecond = 120; startRadarAnimation(); }
+  });
+}
+
+function hydratePersistedUiState() {
+  el.filterInput.value = localStorage.getItem(STORAGE_KEYS.filter) || '';
+  el.includeWatches.checked = (localStorage.getItem(STORAGE_KEYS.includeWatches) || 'false') === 'true';
+  el.criticalOnly.checked = (localStorage.getItem(STORAGE_KEYS.criticalOnly) || 'false') === 'true';
+  el.refreshIntervalSelect.value = localStorage.getItem(STORAGE_KEYS.refreshInterval) || '180';
+}
+
+async function boot() {
+  if (!validateRequiredElements()) return;
+  registerUiListeners();
+  hydratePersistedUiState();
+  renderFavorites();
+  await refreshAll();
   pageHidden = document.hidden;
   if (pageHidden) {
     stopAllTimers();
     return;
   }
-  startAllTimers({ immediateRefresh: true });
-});
+  startAllTimers();
+}
 
-window.addEventListener('keydown', (event) => {
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-  const key = event.key.toLowerCase();
-  if (key === 'r') refreshAll();
-  if (key === 'l') el.locateBtn.click();
-  if (key === 'f') el.filterInput.focus();
-  if (key === ' ') {
-    event.preventDefault();
-    if (radarAnimationTimer) {
-      stopRadarAnimation();
-    } else {
-      startRadarAnimation();
-    }
-  }
-  if (key === '1') { el.speedSelect.value = '30'; minutesPerSecond = 30; startRadarAnimation(); }
-  if (key === '2') { el.speedSelect.value = '60'; minutesPerSecond = 60; startRadarAnimation(); }
-  if (key === '3') { el.speedSelect.value = '120'; minutesPerSecond = 120; startRadarAnimation(); }
-  });
+boot();
