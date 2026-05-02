@@ -493,4 +493,3 @@ window.addEventListener('keydown', (event) => {
   if (key === '2') { el.speedSelect.value = '60'; minutesPerSecond = 60; startRadarAnimation(); }
   if (key === '3') { el.speedSelect.value = '120'; minutesPerSecond = 120; startRadarAnimation(); }
   });
-}

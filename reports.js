@@ -9,10 +9,12 @@ async function loadAnalytics() {
   const r = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
   const data = await r.json();
   const features = data.features || [];
+
   const now = Date.now();
   const since24h = now - 24 * 60 * 60 * 1000;
   const recent = features.filter((f) => new Date(f.properties?.sent || 0).getTime() >= since24h);
   const severe = features.filter((f) => ['Severe', 'Extreme'].includes(f.properties?.severity));
+
   el.analyticsMeta.textContent = `${features.length} active | ${recent.length} issued in last 24h`;
 
   const renderSummaryItem = (label, value) => {
@@ -33,18 +35,23 @@ async function loadAnalytics() {
     renderSummaryItem('Last 24h Issued', recent.length)
   );
 
-    const data = await r.json();
-    const features = data.features || [];
-    const now = Date.now();
-    const since24h = now - 24 * 60 * 60 * 1000;
-    const recent = features.filter((f) => new Date(f.properties?.sent || 0).getTime() >= since24h);
-    const severe = features.filter((f) => ['Severe', 'Extreme'].includes(f.properties?.severity));
-    el.analyticsMeta.textContent = `${features.length} active | ${recent.length} issued in last 24h`;
-    el.analyticsSummary.innerHTML = `
-      <article class="favorite-item"><strong>Total Active</strong><span>${features.length}</span></article>
-      <article class="favorite-item"><strong>Severe/Extreme</strong><span>${severe.length}</span></article>
-      <article class="favorite-item"><strong>Last 24h Issued</strong><span>${recent.length}</span></article>
-    `;
+  const areaCounts = {};
+  const eventCounts = {};
+
+  features.forEach((feature) => {
+    const p = feature.properties || {};
+    const event = p.event || 'Unknown Event';
+    eventCounts[event] = (eventCounts[event] || 0) + 1;
+
+    const areas = (p.areaDesc || '')
+      .split(';')
+      .map((name) => name.trim())
+      .filter(Boolean);
+
+    areas.forEach((area) => {
+      areaCounts[area] = (areaCounts[area] || 0) + 1;
+    });
+  });
 
   const renderCountList = (container, entries) => {
     container.innerHTML = '';
